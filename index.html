@@ -390,8 +390,16 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<DynamicScheduler />);
+// 使用 window.onload 確保整個網頁的 DOM 元素都完全載入後，才讓 React 開始掛載與渲染
+        window.onload = function() {
+            const container = document.getElementById('root');
+            if (container) {
+                const root = ReactDOM.createRoot(container);
+                root.render(<DynamicScheduler />);
+            } else {
+                console.error("找不到 #root 節點，請確認 HTML 結構中是否有 <div id='root'></div>");
+            }
+        };
     </script>
 </body>
 </html>
