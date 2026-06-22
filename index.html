@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>假日值班排班系統 (動態人數版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            background-color: #f4f7f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .print-card { border: 1px solid #e2e8f0 !important; box-shadow: none !important; background: white !important; }
+            body { background: white; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // 台灣 2026 與 2027 國定假日/補假資料庫
+        const TAIWAN_HOLIDAYS = {
+            "2026": {
+                "01-01": "元旦", "02-16": "除夕", "02-17": "初一", "02-18": "初二", "02-19": "初三", "02-20": "初四",
+                "02-27": "228連假", "04-03": "清明連假", "04-06": "清明補假", "05-01": "勞動節", "06-19": "端午節",
+                "09-25": "中秋節", "09-28": "教師節", "10-09": "國慶連假", "10-26": "光復補假", "12-25": "行憲節"
+            },
+            "2027": {
+                "01-01": "元旦", "02-04": "小年夜", "02-05": "除夕", "02-08": "初二", "02-09": "初三", "02-10": "初四補",
+                "03-01": "228補假", "04-05": "清明節", "04-06": "兒童清明補", "04-30": "勞動補假", "06-09": "端午節",
+                "09-15": "中秋節", "09-28": "教師節", "10-11": "國慶補假", "10-25": "光復節", "12-24": "行憲補假"
+            }
+        };
+
+        function DynamicScheduler() {
+            const [selectedYear, setSelectedYear] = useState("2026");
+            const [selectedMonth, setSelectedMonth] = useState("06");
+
+            // 主管名單 (動態陣列)
+            const [supervisors, setSupervisors] = useState(() => {
+                const saved = localStorage.getItem("dyn_supervisors");
+                return saved ? JSON.parse(saved) : ["主管1", "主管2", "主管3", "主管4"];
+            });
+
+            // 人員名單 (動態陣列)
+            const [staff, setStaff] = useState(() => {
+                const saved = localStorage.getItem("dyn_staff");
+                return saved ? JSON.parse(saved) : [
+                    "人員1", "人員2", "人員3", "人員4", "人員5",
+                    "人員6", "人員7", "人員8", "人員9", "人員10"
+                ];
+            });
+
+            // 全域排班表資料
+            const [globalSchedule, setGlobalSchedule] = useState(() => {
+                const saved = localStorage.getItem("dyn_global_schedule");
+                return saved ? JSON.parse(saved) : [
+                    { id: "2026-06-06", date: "2026-06-06", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "主管2", staff1: "人員7", staff2: "人員8", notes: "錨定起始日" },
+                    { id: "2026-06-13", date: "2026-06-13", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "", staff1: "", staff2: "", notes: "" },
+                    { id: "2026-06-19", date: "2026-06-19", dayOfWeek: "五", isHoliday: true, holidayName: "端午節", supervisor: "", staff1: "", staff2: "", notes: "端午節連假" },
+                    { id: "2026-06-20", date: "2026-06-20", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "", staff1: "", staff2: "", notes: "" },
+                    { id: "2026-06-27", date: "2026-06-27", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "", staff1: "", staff2: "", notes: "" }
+                ];
+            });
+
+            useEffect(() => { localStorage.setItem("dyn_supervisors", JSON.stringify(supervisors)); }, [supervisors]);
+            useEffect(() => { localStorage.setItem("dyn_staff", JSON.stringify(staff)); }, [staff]);
+            useEffect(() => { localStorage.setItem("dyn_global_schedule", JSON.stringify(globalSchedule)); }, [globalSchedule]);
+
+            const currentFilteredSchedule = useMemo(() => {
+                const prefix = `${selectedYear}-${selectedMonth}`;
+                return globalSchedule.filter(item => item.date.startsWith(prefix));
+            }, [globalSchedule, selectedYear, selectedMonth]);
+
+            // 一鍵動態推算輪替順序
+            const autoFillSequence = () => {
+                const sorted = [...globalSchedule].sort((a, b) => new Date(a.date) - new Date(b.date));
+                const anchorDate = "2026-06-06";
+                const anchorIdx = sorted.findIndex(item => item.date === anchorDate);
+                
+                if (anchorIdx === -1) {
+                    alert("未在排班表中偵測到 2026-06-06 基準日！請先切換至 2026年6月 並點擊初始化框架。");
+                    return;
+                }
+
+                if (supervisors.length === 0 || staff.length < 2) {
+                    alert("請確保至少有 1 位主管與 2 位以上的人員名單，才能進行自動代入！");
+                    return;
+                }
+
+                const updated = sorted.map((item, idx) => {
+                    const diff = idx - anchorIdx;
+                    
+                    // 動態對應當前主管總人數進行輪替 (基礎點 index 1 保持為主管2)
+                    const svIdx = ((1 + diff) % supervisors.length + supervisors.length) % supervisors.length;
+                    
+                    // 動態對應當前人員總人數進行輪替 (基礎點 index 6, 7 保持為人員7, 8)
+                    const st1Idx = ((6 + diff * 2) % staff.length + staff.length) % staff.length;
+                    const st2Idx = ((7 + diff * 2) % staff.length + staff.length) % staff.length;
+
+                    return {
+                        ...item,
+                        supervisor: supervisors[svIdx] || "",
+                        staff1: staff[st1Idx] || "",
+                        staff2: staff[st2Idx] || ""
+                    };
+                });
+
+                setGlobalSchedule(updated);
+            };
+
+            // 初始化指定月份框架
+            const initializeMonthFramework = () => {
+                const yearNum = parseInt(selectedYear);
+                const monthNum = parseInt(selectedMonth);
+                const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+                const daysOfWeekArr = ["日", "一", "二", "三", "四", "五", "六"];
+                
+                const generatedRows = [];
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dString = String(d).padStart(2, '0');
+                    const fullDateStr = `${selectedYear}-${selectedMonth}-${dString}`;
+                    const mmdd = `${selectedMonth}-${dString}`;
+                    
+                    const dateObj = new Date(yearNum, monthNum - 1, d);
+                    const dayOfWeek = daysOfWeekArr[dateObj.getDay()];
+                    
+                    const holidayName = TAIWAN_HOLIDAYS[selectedYear]?.[mmdd] || "";
+                    const isHoliday = holidayName !== "";
+                    const isSaturday = dayOfWeek === "六";
+
+                    if (isSaturday || isHoliday) {
+                        const existingRecord = globalSchedule.find(item => item.date === fullDateStr);
+                        if (existingRecord) {
+                            generatedRows.push(existingRecord);
+                        } else {
+                            generatedRows.push({
+                                id: fullDateStr,
+                                date: fullDateStr,
+                                dayOfWeek: dayOfWeek,
+                                isHoliday: isHoliday,
+                                holidayName: holidayName,
+                                supervisor: "",
+                                staff1: "",
+                                staff2: "",
+                                notes: holidayName ? `國定假日 (${holidayName})` : ""
+                            });
+                        }
+                    }
+                }
+
+                const otherMonthsRecords = globalSchedule.filter(item => !item.date.startsWith(`${selectedYear}-${selectedMonth}`));
+                const updatedGlobal = [...otherMonthsRecords, ...generatedRows].sort((a, b) => new Date(a.date) - new Date(b.date));
+                setGlobalSchedule(updatedGlobal);
+            };
+
+            // 名單管理變更
+            const handlePersonnelChange = (type, index, value) => {
+                if (type === 'supervisor') {
+                    const updated = [...supervisors]; updated[index] = value; setSupervisors(updated);
+                } else {
+                    const updated = [...staff]; updated[index] = value; setStaff(updated);
+                }
+            };
+
+            // 增加名單項目
+            const addPersonnel = (type) => {
+                if (type === 'supervisor') {
+                    setSupervisors([...supervisors, `新增主管${supervisors.length + 1}`]);
+                } else {
+                    setStaff([...staff, `新增人員${staff.length + 1}`]);
+                }
+            };
+
+            // 刪除名單項目
+            const deletePersonnel = (type, index) => {
+                if (type === 'supervisor') {
+                    if (supervisors.length <= 1) return;
+                    setSupervisors(supervisors.filter((_, i) => i !== index));
+                } else {
+                    if (staff.length <= 2) return; 
+                    setStaff(staff.filter((_, i) => i !== index));
+                }
+            };
+
+            const handleScheduleChange = (dateId, field, value) => {
+                setGlobalSchedule(globalSchedule.map(item => item.date === dateId ? { ...item, [field]: value } : item));
+            };
+
+            const deleteDate = (dateId) => {
+                setGlobalSchedule(globalSchedule.filter(item => item.date !== dateId));
+            };
+
+            const monthlyStats = useMemo(() => {
+                const supervisorCounts = {}; const staffCounts = {};
+                supervisors.forEach(s => supervisorCounts[s] = 0);
+                staff.forEach(st => staffCounts[st] = 0);
+                currentFilteredSchedule.forEach(item => {
+                    if (item.supervisor && supervisorCounts[item.supervisor] !== undefined) supervisorCounts[item.supervisor]++;
+                    if (item.staff1 && staffCounts[item.staff1] !== undefined) staffCounts[item.staff1]++;
+                    if (item.staff2 && staffCounts[item.staff2] !== undefined) staffCounts[item.staff2]++;
+                });
+                return { supervisorCounts, staffCounts };
+            }, [currentFilteredSchedule, supervisors, staff]);
+
+            return (
+                <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-gray-200 no-print">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-800 tracking-wide">假日值班排班管理系統</h1>
+                            <p className="text-sm text-gray-500 mt-1">動態擴編模組</p>
+                        </div>
+                        <button 
+                            onClick={() => window.print()}
+                            className="mt-4 sm:mt-0 px-5 py-2.5 bg-sky-500 text-white rounded-xl shadow-sm hover:bg-sky-600 transition-colors font-medium flex items-center gap-2"
+                        >
+                            <span>🖨️</span> 列印本月表格 / 儲存 PDF
+                        </button>
+                    </div>
+
+                    {/* 控制台 */}
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 mb-6 no-print print-card">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-sm font-bold text-gray-700">選擇年月：</span>
+                            <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-xl text-sm font-medium bg-slate-50 focus:outline-none">
+                                <option value="2026">2026 年</option>
+                                <option value="2027">2027 年</option>
+                            </select>
+                            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-xl text-sm font-medium bg-slate-50 focus:outline-none">
+                                {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => <option key={m} value={m}>{m} 月</option>)}
+                            </select>
+
+                            <button onClick={initializeMonthFramework} className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs">
+                                ⚡ 1. 初始化本月框架
+                            </button>
+
+                            <button onClick={autoFillSequence} className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs flex items-center gap-1">
+                                🔄 自動代入
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        {/* 左欄 */}
+                        <div className="lg:col-span-1 space-y-6 no-print">
+                            {/* 主管名單管理 */}
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 print-card">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h2 className="text-md font-bold text-gray-700 flex items-center gap-2">
+                                        <span className="w-2 h-4 bg-pink-400 rounded-full"></span>值班主管順序
+                                    </h2>
+                                    <button onClick={() => addPersonnel('supervisor')} className="text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors">
+                                        ➕ 增加
+                                    </button>
+                                </div>
+                                <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                                    {supervisors.map((sv, idx) => (
+                                        <div key={idx} className="flex items-center gap-1 text-xs">
+                                            <span className="text-gray-400 w-10 font-mono">#{idx+1}</span>
+                                            <input type="text" value={sv} onChange={(e) => handlePersonnelChange('supervisor', idx, e.target.value)} className="w-full px-2 py-1 border border-gray-200 rounded" />
+                                            <button onClick={() => deletePersonnel('supervisor', idx)} className="text-gray-300 hover:text-red-500 px-1">❌</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 人員名單管理 */}
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 print-card">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h2 className="text-md font-bold text-gray-700 flex items-center gap-2">
+                                        <span className="w-2 h-4 bg-sky-400 rounded-full"></span>值班人員順序
+                                    </h2>
+                                    <button onClick={() => addPersonnel('staff')} className="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors">
+                                        ➕ 增加
+                                    </button>
+                                </div>
+                                <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
+                                    {staff.map((st, idx) => (
+                                        <div key={idx} className="flex items-center gap-1 text-xs">
+                                            <span className="text-gray-400 w-10 font-mono">#{idx+1}</span>
+                                            <input type="text" value={st} onChange={(e) => handlePersonnelChange('staff', idx, e.target.value)} className="w-full px-2 py-1 border border-gray-200 rounded" />
+                                            <button onClick={() => deletePersonnel('staff', idx)} className="text-gray-300 hover:text-red-500 px-1">❌</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 統計 */}
+                            <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-2xl border border-gray-200 text-xs">
+                                <h3 className="font-bold text-gray-700 mb-2">📊 {selectedYear}年{selectedMonth}月 當月值班次數</h3>
+                                <div className="space-y-2">
+                                    <div>
+                                        <span className="font-semibold text-pink-600 block mb-1">主管別</span>
+                                        <div className="grid grid-cols-2 gap-1">
+                                            {supervisors.map(sv => <div key={sv} className="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>{sv}</span><span className="font-bold">{monthlyStats.supervisorCounts[sv]||0}次</span></div>)}
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-200">
+                                        <span className="font-semibold text-sky-600 block mb-1">人員別</span>
+                                        <div className="grid grid-cols-2 gap-1 max-h-[120px] overflow-y-auto">
+                                            {staff.map(st => <div key={st} className="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>{st}</span><span className="font-bold">{monthlyStats.staffCounts[st]||0}次</span></div>)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 右欄表格 */}
+                        <div className="lg:col-span-3 space-y-4">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card">
+                                <div className="p-4 bg-slate-50 border-b border-gray-200 font-bold text-gray-800">
+                                    📅 {selectedYear} 年 {selectedMonth} 月 假日值班表
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                            <tr className="bg-slate-100/70 border-b border-gray-200 text-gray-600 font-semibold uppercase">
+                                                <th className="py-3 px-4 w-28">值班日期</th>
+                                                <th className="py-3 px-4 w-24 text-center">狀態 / 星期</th>
+                                                <th className="py-3 px-4 w-32">值班主管</th>
+                                                <th className="py-3 px-4 w-32">值班人員一</th>
+                                                <th className="py-3 px-4 w-32">值班人員二</th>
+                                                <th className="py-3 px-4">重大追蹤事項 / 備註</th>
+                                                <th className="py-3 px-4 w-12 text-center no-print">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 text-gray-700">
+                                            {currentFilteredSchedule.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="7" className="text-center py-12 text-gray-400">
+                                                        本月份尚未初始化框架。<br/>
+                                                        <button onClick={initializeMonthFramework} className="mt-2 px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl hover:bg-emerald-100 font-medium">
+                                                            ✨ 點此一鍵建立本月框架
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                currentFilteredSchedule.map((item) => (
+                                                    <tr key={item.date} className="hover:bg-slate-50/40">
+                                                        <td className="py-2.5 px-4 font-mono font-medium text-gray-900">{item.date}</td>
+                                                        <td className="py-2.5 px-4 text-center">
+                                                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold block truncate max-w-[100px] mx-auto ${item.isHoliday ? "bg-rose-100 text-rose-700 border border-rose-200" : "bg-amber-100 text-amber-700"}`}>
+                                                                {item.isHoliday ? (item.holidayName || "國定假日") : `週${item.dayOfWeek}`}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-1">
+                                                            <select value={item.supervisor} onChange={(e) => handleScheduleChange(item.date, 'supervisor', e.target.value)} className="w-full bg-pink-50/30 border border-pink-200/50 rounded-lg px-1.5 py-1 focus:ring-2 focus:ring-pink-300">
+                                                                <option value="">-- 主管 --</option>
+                                                                {supervisors.map(sv => <option key={sv} value={sv}>{sv}</option>)}
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-1">
+                                                            <select value={item.staff1} onChange={(e) => handleScheduleChange(item.date, 'staff1', e.target.value)} className="w-full bg-sky-50/30 border border-sky-200/50 rounded-lg px-1.5 py-1 focus:ring-2 focus:ring-sky-300">
+                                                                <option value="">-- 人員一 --</option>
+                                                                {staff.map(st => <option key={st} value={st}>{st}</option>)}
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-1">
+                                                            <select value={item.staff2} onChange={(e) => handleScheduleChange(item.date, 'staff2', e.target.value)} className="w-full bg-sky-50/30 border border-sky-200/50 rounded-lg px-1.5 py-1 focus:ring-2 focus:ring-sky-300">
+                                                                <option value="">-- 人員二 --</option>
+                                                                {staff.map(st => <option key={st} value={st}>{st}</option>)}
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-1">
+                                                            <input type="text" value={item.notes} placeholder="交辦/追蹤事項..." onChange={(e) => handleScheduleChange(item.date, 'notes', e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1 placeholder-gray-300" />
+                                                        </td>
+                                                        <td className="p-1 text-center no-print">
+                                                            <button onClick={() => deleteDate(item.date)} className="text-gray-300 hover:text-red-500">🗑️</button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DynamicScheduler />);
+    </script>
+</body>
+</html>
