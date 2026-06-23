@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>假日值班排班系統 (原生免伺服器版)</title>
+    <title>假日值班排班系統 (自動接續版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -22,7 +22,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-gray-200 no-print">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800 tracking-wide">假日值班排班管理系統</h1>
-                <p class="text-sm text-gray-500 mt-1">動態擴編模組 (離線相容版)</p>
+                <p class="text-sm text-gray-500 mt-1">動態擴編與自動接續模組 (離線相容版)</p>
             </div>
             <button onclick="window.print()" class="mt-4 sm:mt-0 px-5 py-2.5 bg-sky-500 text-white rounded-xl shadow-sm hover:bg-sky-600 transition-colors font-medium flex items-center gap-2">
                 <span>🖨️</span> 列印本月表格 / 儲存 PDF
@@ -43,8 +43,15 @@
                     ⚡ 1. 初始化本月框架
                 </button>
 
+                <span class="text-xs font-bold text-gray-500 ml-2">接續起點：</span>
+                <button onclick="autoDetectStartingPoint(false)" class="text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 py-1.5 rounded-lg transition-colors font-bold shadow-sm" title="根據過去歷史紀錄自動抓取下一位">
+                    🎯 自動偵測
+                </button>
+                <select id="startSvSelect" class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-pink-50/50 focus:outline-none"></select>
+                <select id="startStSelect" class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-sky-50/50 focus:outline-none"></select>
+
                 <button onclick="autoFillSequence()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs flex items-center gap-1">
-                    🔄 自動代入
+                    🔄 2. 自動代入當月
                 </button>
             </div>
         </div>
@@ -132,19 +139,12 @@
             }
         };
 
-        // 初始化狀態
         let selectedYear = "2026";
         let selectedMonth = "06";
 
         let supervisors = JSON.parse(localStorage.getItem("dyn_supervisors")) || ["主管1", "主管2", "主管3", "主管4"];
         let staff = JSON.parse(localStorage.getItem("dyn_staff")) || ["人員1", "人員2", "人員3", "人員4", "人員5", "人員6", "人員7", "人員8", "人員9", "人員10"];
-        let globalSchedule = JSON.parse(localStorage.getItem("dyn_global_schedule")) || [
-            { id: "2026-06-06", date: "2026-06-06", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "主管2", staff1: "人員7", staff2: "人員8", notes: "錨定起始日" },
-            { id: "2026-06-13", date: "2026-06-13", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "", staff1: "", staff2: "", notes: "" },
-            { id: "2026-06-19", date: "2026-06-19", dayOfWeek: "五", isHoliday: true, holidayName: "端午節", supervisor: "", staff1: "", staff2: "", notes: "端午節連假" },
-            { id: "2026-06-20", date: "2026-06-20", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "", staff1: "", staff2: "", notes: "" },
-            { id: "2026-06-27", date: "2026-06-27", dayOfWeek: "六", isHoliday: false, holidayName: "", supervisor: "", staff1: "", staff2: "", notes: "" }
-        ];
+        let globalSchedule = JSON.parse(localStorage.getItem("dyn_global_schedule")) || [];
 
         function saveToStorage() {
             localStorage.setItem("dyn_supervisors", JSON.stringify(supervisors));
@@ -163,13 +163,14 @@
         }
         document.getElementById("yearSelect").value = selectedYear;
 
+        // 切換年月時，自動渲染並「默默幫你偵測起點」
         function changeYearMonth() {
             selectedYear = document.getElementById("yearSelect").value;
             selectedMonth = document.getElementById("monthSelect").value;
             render();
+            autoDetectStartingPoint(true); // true 代表靜默模式，不跳出 alert
         }
 
-        // 人員名單異動
         function handlePersonnelChange(type, index, value) {
             if (type === 'supervisor') supervisors[index] = value;
             else staff[index] = value;
@@ -196,11 +197,10 @@
             render();
         }
 
-        // 排班內容異動
         function handleScheduleChange(dateId, field, value) {
             globalSchedule = globalSchedule.map(item => item.date === dateId ? { ...item, [field]: value } : item);
             saveToStorage();
-            renderStats(); // 即時更新統計數字
+            renderStats();
         }
 
         function deleteDate(dateId) {
@@ -209,7 +209,6 @@
             render();
         }
 
-        // 初始化框架
         function initializeMonthFramework() {
             const yearNum = parseInt(selectedYear);
             const monthNum = parseInt(selectedMonth);
@@ -248,40 +247,100 @@
             render();
         }
 
-        // 自動輪替演算法
-        function autoFillSequence() {
-            const sorted = [...globalSchedule].sort((a, b) => new Date(a.date) - new Date(b.date));
-            const anchorDate = "2026-06-06";
-            const anchorIdx = sorted.findIndex(item => item.date === anchorDate);
+        function updateStartSelectors() {
+            const svSelect = document.getElementById("startSvSelect");
+            const stSelect = document.getElementById("startStSelect");
+            if(!svSelect || !stSelect) return;
+
+            const prevSv = svSelect.value;
+            const prevSt = stSelect.value;
+
+            svSelect.innerHTML = supervisors.map(sv => `<option value="${sv}">${sv}</option>`).join('');
+            stSelect.innerHTML = staff.map(st => `<option value="${st}">${st}</option>`).join('');
+
+            if (supervisors.includes(prevSv)) svSelect.value = prevSv;
+            if (staff.includes(prevSt)) stSelect.value = prevSt;
+        }
+
+        // ⭐ 新增的核心功能：自動尋找歷史接續點
+        function autoDetectStartingPoint(silent = false) {
+            const targetPrefix = `${selectedYear}-${selectedMonth}`;
             
-            if (anchorIdx === -1) {
-                alert("未在排班表中偵測到 2026-06-06 基準日！請先切換至 2026年6月 並點擊初始化框架。");
+            // 尋找全域紀錄中，日期「小於」本月1號，且「已有安排主管」的歷史紀錄
+            const pastRecords = globalSchedule.filter(item => item.date < `${targetPrefix}-01` && item.supervisor !== "");
+            
+            if (pastRecords.length === 0) {
+                if (!silent) alert("目前找不到在此月份之前的排班紀錄，將預設為名單的第一位。");
+                return;
+            }
+
+            // 由大到小排序，抓取離目前最近的一天（最後排班日）
+            pastRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const lastRecord = pastRecords[0];
+
+            // 尋找最後一天的主管，以及「人員二（當天最後輪到的基層）」在現有名單的索引位置
+            let svIdx = supervisors.indexOf(lastRecord.supervisor);
+            let stIdx = staff.indexOf(lastRecord.staff2);
+
+            const svSelect = document.getElementById("startSvSelect");
+            const stSelect = document.getElementById("startStSelect");
+
+            // 如果名單裡還找得到這個人，就順延加 1 ( % 總人數作為循環)
+            if (svIdx !== -1 && svSelect) {
+                svSelect.value = supervisors[(svIdx + 1) % supervisors.length];
+            }
+            if (stIdx !== -1 && stSelect) {
+                stSelect.value = staff[(stIdx + 1) % staff.length];
+            }
+
+            if (!silent) alert(`已自動抓取！\n上一筆排班為 ${lastRecord.date}。\n為您接續排定下一位主管與人員。`);
+        }
+
+        function autoFillSequence() {
+            const prefix = `${selectedYear}-${selectedMonth}`;
+            const currentMonthItems = globalSchedule.filter(item => item.date.startsWith(prefix));
+            
+            if (currentMonthItems.length === 0) {
+                alert("請先點擊『初始化本月框架』再進行自動代入！");
                 return;
             }
             if (supervisors.length === 0 || staff.length < 2) {
-                alert("請確保至少有 1 位主管與 2 位以上的人員名單，才能進行自動代入！");
+                alert("請確保至少有 1 位主管與 2 位以上的人員名單！");
                 return;
             }
 
-            globalSchedule = sorted.map((item, idx) => {
-                const diff = idx - anchorIdx;
-                const svIdx = ((1 + diff) % supervisors.length + supervisors.length) % supervisors.length;
-                const st1Idx = ((6 + diff * 2) % staff.length + staff.length) % staff.length;
-                const st2Idx = ((7 + diff * 2) % staff.length + staff.length) % staff.length;
+            const startSvName = document.getElementById("startSvSelect").value;
+            const startStName = document.getElementById("startStSelect").value;
+
+            let svPointer = supervisors.indexOf(startSvName);
+            let stPointer = staff.indexOf(startStName);
+
+            if (svPointer === -1) svPointer = 0;
+            if (stPointer === -1) stPointer = 0;
+
+            const updatedMonthItems = currentMonthItems.map((item) => {
+                const assignedSupervisor = supervisors[svPointer];
+                const assignedStaff1 = staff[stPointer];
+                const assignedStaff2 = staff[(stPointer + 1) % staff.length];
+
+                svPointer = (svPointer + 1) % supervisors.length;
+                stPointer = (stPointer + 2) % staff.length;
 
                 return {
                     ...item,
-                    supervisor: supervisors[svIdx] || "",
-                    staff1: staff[st1Idx] || "",
-                    staff2: staff[st2Idx] || ""
+                    supervisor: assignedSupervisor || "",
+                    staff1: assignedStaff1 || "",
+                    staff2: assignedStaff2 || ""
                 };
             });
+
+            const otherMonthsRecords = globalSchedule.filter(item => !item.date.startsWith(prefix));
+            globalSchedule = [...otherMonthsRecords, ...updatedMonthItems].sort((a, b) => new Date(a.date) - new Date(b.date));
 
             saveToStorage();
             render();
         }
 
-        // 渲染統計與表格
         function renderStats() {
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentFiltered = globalSchedule.filter(item => item.date.startsWith(prefix));
@@ -312,7 +371,6 @@
         }
 
         function render() {
-            // 1. 渲染左側名單管理
             document.getElementById("supervisorList").innerHTML = supervisors.map((sv, idx) => `
                 <div class="flex items-center gap-1 text-xs">
                     <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
@@ -329,7 +387,6 @@
                 </div>
             `).join('');
 
-            // 2. 渲染右側排班表格
             document.getElementById("tableTitle").textContent = `📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表`;
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentFiltered = globalSchedule.filter(item => item.date.startsWith(prefix));
@@ -387,9 +444,9 @@
             }
 
             renderStats();
+            updateStartSelectors();
         }
 
-        // 首次載入執行
         render();
     </script>
 </body>
