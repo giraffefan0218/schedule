@@ -216,9 +216,9 @@ const firebaseConfig = {
             if (!password) return;
 
             // 後端對接固定的管理員信箱，維持前端純密碼輸入的簡潔體驗
-            auth.signInWithEmailAndPassword("admin@duty.local", password)
+            auth.signInWithEmailAndPassword("giraffefan0218@gmail.com", password)
                 .then(() => {
-                    alert("🔓 雲端令牌驗證成功！已安全解鎖編輯權限。");
+                    alert("🔓 驗證成功！已安全解鎖編輯權限。");
                 })
                 .catch(err => {
                     alert("❌ 密碼錯誤或驗證失敗！\n錯誤代碼: " + err.message);
@@ -457,7 +457,7 @@ const firebaseConfig = {
             // 1. 監聽管理員登入狀態 (跨裝置即時追蹤安全令牌)
             auth.onAuthStateChanged((user) => {
                 // 必須是我們指定的管理員帳號才給予前端編輯介面
-                isAdmin = (user && user.email === 'admin@duty.local');
+                isAdmin = (user && user.email === 'giraffefan0218@gmail.com');
                 render();
                 autoDetectStartingPoint(true);
             });
