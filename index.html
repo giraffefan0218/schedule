@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>假日值班排班系統 (雲端同步版)</title>
+    <title>假日值班排班系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
         body {
@@ -24,7 +25,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-gray-200 no-print">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800 tracking-wide">假日值班排班管理系統</h1>
-                <p class="text-sm text-gray-500 mt-1">🌍 GitHub Pages 雲端即時同步多端檢視版</p>
+                <p class="text-sm text-gray-500 mt-1"></p>
             </div>
             <div class="flex items-center gap-2 mt-4 sm:mt-0">
                 <div id="adminAuthSection" class="flex items-center gap-2"></div>
@@ -123,7 +124,8 @@
 
     <script>
         // 🛠️ 填入您的 Firebase 設定物件
-       const firebaseConfig = {
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
   apiKey: "AIzaSyCwOw7QKyTY1K7So4LISmfTaqZBsMi3LfI",
   authDomain: "achta-6adb2.firebaseapp.com",
   databaseURL: "https://achta-6adb2-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -137,6 +139,7 @@
         // 初始化 Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const auth = firebase.auth();
 
         // 國定假日資料庫
         const TAIWAN_HOLIDAYS = {
@@ -156,20 +159,22 @@
         let selectedMonth = "06";
         let isAdmin = false;
 
-        // 預設在地名單 (若雲端無資料時備用)
         let supervisors = ["主管1", "主管2", "主管3", "主管4"];
         let staff = ["人員1", "人員2", "人員3", "人員4", "人員5", "人員6", "人員7", "人員8", "人員9", "人員10"];
         let globalSchedule = [];
 
         // 將資料同步上傳至 Firebase 雲端
         function saveToFirebase() {
-            if (!isAdmin) return;
+            if (!isAdmin) {
+                alert("❌ 操作遭拒：非管理員身分或未登入。");
+                return;
+            }
             db.ref("duty_system").set({
                 supervisors: supervisors,
                 staff: staff,
                 globalSchedule: globalSchedule
             }).catch(err => {
-                alert("❌ 雲端同步失敗，請檢查 Firebase 權限安全規則設定！");
+                alert("❌ 雲端拒絕寫入！\n原因：未通過伺服器驗證，或 F12 被系統攔截。");
             });
         }
 
@@ -190,7 +195,6 @@
             if (isAdmin) {
                 authSection.innerHTML = `
                     <button onclick="resetSystemStorage()" class="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 text-xs font-semibold mr-1">🚨 重置雲端</button>
-                    <button onclick="changeAdminPassword()" class="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 text-xs font-semibold mr-1">🔑 修改密碼</button>
                     <button onclick="logoutAdmin()" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl text-xs transition-colors shadow-sm">🔓 退出管理</button>
                 `;
                 document.querySelectorAll(".admin-only-btn, .admin-only-label").forEach(el => el.classList.remove("hidden"));
@@ -206,30 +210,25 @@
             }
         }
 
+        // 呼叫 Firebase Auth 雲端登入驗證
         function loginAdmin() {
-            const correctPwd = localStorage.getItem("sys_admin_password") || "admin123";
-            const input = prompt("請輸入管理密碼：\n(預設為 admin123，登入後可於右上角修改)");
-            if (input === correctPwd) {
-                isAdmin = true;
-                alert("🔓 驗證成功！已解鎖編輯權限。");
-                render();
-            } else if (input !== null) {
-                alert("❌ 密碼錯誤！");
-            }
+            const password = prompt("請輸入您在 Firebase Console 設定的管理員密碼：");
+            if (!password) return;
+
+            // 後端對接固定的管理員信箱，維持前端純密碼輸入的簡潔體驗
+            auth.signInWithEmailAndPassword("admin@duty.local", password)
+                .then(() => {
+                    alert("🔓 雲端令牌驗證成功！已安全解鎖編輯權限。");
+                })
+                .catch(err => {
+                    alert("❌ 密碼錯誤或驗證失敗！\n錯誤代碼: " + err.message);
+                });
         }
 
         function logoutAdmin() {
-            isAdmin = false;
-            render();
-        }
-
-        function changeAdminPassword() {
-            if (!isAdmin) return;
-            const newPwd = prompt("請輸入新的管理密碼：");
-            if (newPwd && newPwd.trim() !== "") {
-                localStorage.setItem("sys_admin_password", newPwd.trim());
-                alert("✨ 密碼修改成功！（密碼保存在您當前瀏覽器中）");
-            }
+            auth.signOut().then(() => {
+                alert("🔒 已安全登出管理員身份，權限令牌已失效。");
+            });
         }
 
         function resetSystemStorage() {
@@ -246,7 +245,6 @@
             autoDetectStartingPoint(true);
         }
 
-        // 為了防止即時雲端同步干擾打字 Focus，名單修改改為 onchange (離開輸入框或按 Enter 時觸發同步)
         function handlePersonnelChange(type, index, value) {
             if (!isAdmin) return;
             if (type === 'supervisor') supervisors[index] = value;
@@ -454,8 +452,17 @@
             updateStartSelectors();
         }
 
-        // 核心：網頁載入時自動監聽 Firebase 雲端更新
+        // 核心監聽：
         window.onload = function() {
+            // 1. 監聽管理員登入狀態 (跨裝置即時追蹤安全令牌)
+            auth.onAuthStateChanged((user) => {
+                // 必須是我們指定的管理員帳號才給予前端編輯介面
+                isAdmin = (user && user.email === 'admin@duty.local');
+                render();
+                autoDetectStartingPoint(true);
+            });
+
+            // 2. 監聽雲端資料庫（所有人都可以即時同步看最新課表）
             db.ref("duty_system").on("value", (snapshot) => {
                 const data = snapshot.val();
                 if (data) {
