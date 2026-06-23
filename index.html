@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>假日值班排班系統 (自動接續版)</title>
+    <title>假日值班排班系統 (雲端同步版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
         body {
             background-color: #f4f7f6;
@@ -22,11 +24,14 @@
         <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-gray-200 no-print">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800 tracking-wide">假日值班排班管理系統</h1>
-                <p class="text-sm text-gray-500 mt-1">動態擴編與自動接續模組 (離線相容版)</p>
+                <p class="text-sm text-gray-500 mt-1">🌍 GitHub Pages 雲端即時同步多端檢視版</p>
             </div>
-            <button onclick="window.print()" class="mt-4 sm:mt-0 px-5 py-2.5 bg-sky-500 text-white rounded-xl shadow-sm hover:bg-sky-600 transition-colors font-medium flex items-center gap-2">
-                <span>🖨️</span> 列印本月表格 / 儲存 PDF
-            </button>
+            <div class="flex items-center gap-2 mt-4 sm:mt-0">
+                <div id="adminAuthSection" class="flex items-center gap-2"></div>
+                <button onclick="window.print()" class="px-5 py-2.5 bg-sky-500 text-white rounded-xl shadow-sm hover:bg-sky-600 transition-colors font-medium flex items-center gap-2 text-sm">
+                    <span>🖨️</span> 列印本月表格 / 儲存 PDF
+                </button>
+            </div>
         </div>
 
         <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-4 mb-6 no-print print-card">
@@ -36,21 +41,20 @@
                     <option value="2026">2026 年</option>
                     <option value="2027">2027 年</option>
                 </select>
-                <select id="monthSelect" onchange="changeYearMonth()" class="px-3 py-1.5 border border-gray-200 rounded-xl text-sm font-medium bg-slate-50 focus:outline-none">
-                    </select>
+                <select id="monthSelect" onchange="changeYearMonth()" class="px-3 py-1.5 border border-gray-200 rounded-xl text-sm font-medium bg-slate-50 focus:outline-none"></select>
 
-                <button onclick="initializeMonthFramework()" class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs">
+                <button onclick="initializeMonthFramework()" class="admin-only-btn px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs hidden">
                     ⚡ 1. 初始化本月框架
                 </button>
 
-                <span class="text-xs font-bold text-gray-500 ml-2">接續起點：</span>
-                <button onclick="autoDetectStartingPoint(false)" class="text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 py-1.5 rounded-lg transition-colors font-bold shadow-sm" title="根據過去歷史紀錄自動抓取下一位">
+                <span class="admin-only-label text-xs font-bold text-gray-500 ml-2 hidden">接續起點：</span>
+                <button onclick="autoDetectStartingPoint(false)" class="admin-only-btn text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 py-1.5 rounded-lg transition-colors font-bold shadow-sm hidden">
                     🎯 自動偵測
                 </button>
-                <select id="startSvSelect" class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-pink-50/50 focus:outline-none"></select>
-                <select id="startStSelect" class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-sky-50/50 focus:outline-none"></select>
+                <select id="startSvSelect" class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-pink-50/50 focus:outline-none hidden"></select>
+                <select id="startStSelect" class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-sky-50/50 focus:outline-none hidden"></select>
 
-                <button onclick="autoFillSequence()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs flex items-center gap-1">
+                <button onclick="autoFillSequence()" class="admin-only-btn px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm transition-colors shadow-2xs hidden">
                     🔄 2. 自動代入當月
                 </button>
             </div>
@@ -63,9 +67,7 @@
                         <h2 class="text-md font-bold text-gray-700 flex items-center gap-2">
                             <span class="w-2 h-4 bg-pink-400 rounded-full"></span>值班主管順序
                         </h2>
-                        <button onclick="addPersonnel('supervisor')" class="text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors">
-                            ➕ 增加
-                        </button>
+                        <button id="addSvBtn" onclick="addPersonnel('supervisor')" class="admin-only-btn text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors hidden">➕ 增加</button>
                     </div>
                     <div id="supervisorList" class="space-y-1.5 max-h-[180px] overflow-y-auto pr-1"></div>
                 </div>
@@ -75,9 +77,7 @@
                         <h2 class="text-md font-bold text-gray-700 flex items-center gap-2">
                             <span class="w-2 h-4 bg-sky-400 rounded-full"></span>值班人員順序
                         </h2>
-                        <button onclick="addPersonnel('staff')" class="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors">
-                            ➕ 增加
-                        </button>
+                        <button id="addStBtn" onclick="addPersonnel('staff')" class="admin-only-btn text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors hidden">➕ 增加</button>
                     </div>
                     <div id="staffList" class="space-y-1.5 max-h-[240px] overflow-y-auto pr-1"></div>
                 </div>
@@ -99,9 +99,7 @@
 
             <div class="lg:col-span-3 space-y-4">
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card">
-                    <div id="tableTitle" class="p-4 bg-slate-50 border-b border-gray-200 font-bold text-gray-800">
-                        📅 假日值班表
-                    </div>
+                    <div id="tableTitle" class="p-4 bg-slate-50 border-b border-gray-200 font-bold text-gray-800">📅 假日值班表</div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs">
                             <thead>
@@ -115,8 +113,7 @@
                                     <th class="py-3 px-4 w-12 text-center no-print">操作</th>
                                 </tr>
                             </thead>
-                            <tbody id="scheduleBody" class="divide-y divide-gray-100 text-gray-700">
-                                </tbody>
+                            <tbody id="scheduleBody" class="divide-y divide-gray-100 text-gray-700"></tbody>
                         </table>
                     </div>
                 </div>
@@ -125,7 +122,23 @@
     </div>
 
     <script>
-        // 台灣 2026 與 2027 國定假日/補假資料庫
+        // 🛠️ 填入您的 Firebase 設定物件
+       const firebaseConfig = {
+  apiKey: "AIzaSyCwOw7QKyTY1K7So4LISmfTaqZBsMi3LfI",
+  authDomain: "achta-6adb2.firebaseapp.com",
+  databaseURL: "https://achta-6adb2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "achta-6adb2",
+  storageBucket: "achta-6adb2.firebasestorage.app",
+  messagingSenderId: "1094660947040",
+  appId: "1:1094660947040:web:b3ca61d4b03a977f731705",
+  measurementId: "G-DGLPBLWYTC"
+};
+
+        // 初始化 Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 國定假日資料庫
         const TAIWAN_HOLIDAYS = {
             "2026": {
                 "01-01": "元旦", "02-16": "除夕", "02-17": "初一", "02-18": "初二", "02-19": "初三", "02-20": "初四",
@@ -141,18 +154,26 @@
 
         let selectedYear = "2026";
         let selectedMonth = "06";
+        let isAdmin = false;
 
-        let supervisors = JSON.parse(localStorage.getItem("dyn_supervisors")) || ["主管1", "主管2", "主管3", "主管4"];
-        let staff = JSON.parse(localStorage.getItem("dyn_staff")) || ["人員1", "人員2", "人員3", "人員4", "人員5", "人員6", "人員7", "人員8", "人員9", "人員10"];
-        let globalSchedule = JSON.parse(localStorage.getItem("dyn_global_schedule")) || [];
+        // 預設在地名單 (若雲端無資料時備用)
+        let supervisors = ["主管1", "主管2", "主管3", "主管4"];
+        let staff = ["人員1", "人員2", "人員3", "人員4", "人員5", "人員6", "人員7", "人員8", "人員9", "人員10"];
+        let globalSchedule = [];
 
-        function saveToStorage() {
-            localStorage.setItem("dyn_supervisors", JSON.stringify(supervisors));
-            localStorage.setItem("dyn_staff", JSON.stringify(staff));
-            localStorage.setItem("dyn_global_schedule", JSON.stringify(globalSchedule));
+        // 將資料同步上傳至 Firebase 雲端
+        function saveToFirebase() {
+            if (!isAdmin) return;
+            db.ref("duty_system").set({
+                supervisors: supervisors,
+                staff: staff,
+                globalSchedule: globalSchedule
+            }).catch(err => {
+                alert("❌ 雲端同步失敗，請檢查 Firebase 權限安全規則設定！");
+            });
         }
 
-        // 初始化月份選單
+        // 月份選單生成
         const monthSelect = document.getElementById("monthSelect");
         for (let i = 1; i <= 12; i++) {
             let m = String(i).padStart(2, '0');
@@ -161,55 +182,106 @@
             if (m === selectedMonth) opt.selected = true;
             monthSelect.appendChild(opt);
         }
-        document.getElementById("yearSelect").value = selectedYear;
 
-        // 切換年月時，自動渲染並「默默幫你偵測起點」
+        function updateAdminUI() {
+            const authSection = document.getElementById("adminAuthSection");
+            if (!authSection) return;
+
+            if (isAdmin) {
+                authSection.innerHTML = `
+                    <button onclick="resetSystemStorage()" class="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 text-xs font-semibold mr-1">🚨 重置雲端</button>
+                    <button onclick="changeAdminPassword()" class="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 text-xs font-semibold mr-1">🔑 修改密碼</button>
+                    <button onclick="logoutAdmin()" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl text-xs transition-colors shadow-sm">🔓 退出管理</button>
+                `;
+                document.querySelectorAll(".admin-only-btn, .admin-only-label").forEach(el => el.classList.remove("hidden"));
+                document.getElementById("startSvSelect")?.classList.remove("hidden");
+                document.getElementById("startStSelect")?.classList.remove("hidden");
+            } else {
+                authSection.innerHTML = `
+                    <button onclick="loginAdmin()" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition-colors shadow-sm">🔒 管理登入</button>
+                `;
+                document.querySelectorAll(".admin-only-btn, .admin-only-label").forEach(el => el.classList.add("hidden"));
+                document.getElementById("startSvSelect")?.classList.add("hidden");
+                document.getElementById("startStSelect")?.classList.add("hidden");
+            }
+        }
+
+        function loginAdmin() {
+            const correctPwd = localStorage.getItem("sys_admin_password") || "admin123";
+            const input = prompt("請輸入管理密碼：\n(預設為 admin123，登入後可於右上角修改)");
+            if (input === correctPwd) {
+                isAdmin = true;
+                alert("🔓 驗證成功！已解鎖編輯權限。");
+                render();
+            } else if (input !== null) {
+                alert("❌ 密碼錯誤！");
+            }
+        }
+
+        function logoutAdmin() {
+            isAdmin = false;
+            render();
+        }
+
+        function changeAdminPassword() {
+            if (!isAdmin) return;
+            const newPwd = prompt("請輸入新的管理密碼：");
+            if (newPwd && newPwd.trim() !== "") {
+                localStorage.setItem("sys_admin_password", newPwd.trim());
+                alert("✨ 密碼修改成功！（密碼保存在您當前瀏覽器中）");
+            }
+        }
+
+        function resetSystemStorage() {
+            if (!isAdmin) return;
+            if (confirm("🚨 確定要完全清空雲端資料庫的所有排班與名單紀錄嗎？")) {
+                db.ref("duty_system").remove().then(() => window.location.reload());
+            }
+        }
+
         function changeYearMonth() {
             selectedYear = document.getElementById("yearSelect").value;
             selectedMonth = document.getElementById("monthSelect").value;
             render();
-            autoDetectStartingPoint(true); // true 代表靜默模式，不跳出 alert
+            autoDetectStartingPoint(true);
         }
 
+        // 為了防止即時雲端同步干擾打字 Focus，名單修改改為 onchange (離開輸入框或按 Enter 時觸發同步)
         function handlePersonnelChange(type, index, value) {
+            if (!isAdmin) return;
             if (type === 'supervisor') supervisors[index] = value;
             else staff[index] = value;
-            saveToStorage();
-            render();
+            saveToFirebase();
         }
 
         function addPersonnel(type) {
-            if (type === 'supervisor') supervisors.push(`新增主管${supervisors.length + 1}`);
-            else staff.push(`新增人員${staff.length + 1}`);
-            saveToStorage();
-            render();
+            if (!isAdmin) return;
+            if (type === 'supervisor') supervisors.push(`新主管${supervisors.length + 1}`);
+            else staff.push(`新人員${staff.length + 1}`);
+            saveToFirebase();
         }
 
         function deletePersonnel(type, index) {
-            if (type === 'supervisor') {
-                if (supervisors.length <= 1) return;
-                supervisors.splice(index, 1);
-            } else {
-                if (staff.length <= 2) return;
-                staff.splice(index, 1);
-            }
-            saveToStorage();
-            render();
+            if (!isAdmin) return;
+            if (type === 'supervisor') { if (supervisors.length > 1) supervisors.splice(index, 1); }
+            else { if (staff.length > 2) staff.splice(index, 1); }
+            saveToFirebase();
         }
 
         function handleScheduleChange(dateId, field, value) {
+            if (!isAdmin) return;
             globalSchedule = globalSchedule.map(item => item.date === dateId ? { ...item, [field]: value } : item);
-            saveToStorage();
-            renderStats();
+            saveToFirebase();
         }
 
         function deleteDate(dateId) {
+            if (!isAdmin) return;
             globalSchedule = globalSchedule.filter(item => item.date !== dateId);
-            saveToStorage();
-            render();
+            saveToFirebase();
         }
 
         function initializeMonthFramework() {
+            if (!isAdmin) return;
             const yearNum = parseInt(selectedYear);
             const monthNum = parseInt(selectedMonth);
             const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
@@ -243,18 +315,15 @@
 
             const otherMonthsRecords = globalSchedule.filter(item => !item.date.startsWith(`${selectedYear}-${selectedMonth}`));
             globalSchedule = [...otherMonthsRecords, ...generatedRows].sort((a, b) => new Date(a.date) - new Date(b.date));
-            saveToStorage();
-            render();
+            saveToFirebase();
         }
 
         function updateStartSelectors() {
             const svSelect = document.getElementById("startSvSelect");
             const stSelect = document.getElementById("startStSelect");
-            if(!svSelect || !stSelect) return;
+            if (!svSelect || !stSelect) return;
 
-            const prevSv = svSelect.value;
-            const prevSt = stSelect.value;
-
+            const prevSv = svSelect.value; const prevSt = stSelect.value;
             svSelect.innerHTML = supervisors.map(sv => `<option value="${sv}">${sv}</option>`).join('');
             stSelect.innerHTML = staff.map(st => `<option value="${st}">${st}</option>`).join('');
 
@@ -262,89 +331,50 @@
             if (staff.includes(prevSt)) stSelect.value = prevSt;
         }
 
-        // ⭐ 新增的核心功能：自動尋找歷史接續點
         function autoDetectStartingPoint(silent = false) {
             const targetPrefix = `${selectedYear}-${selectedMonth}`;
-            
-            // 尋找全域紀錄中，日期「小於」本月1號，且「已有安排主管」的歷史紀錄
             const pastRecords = globalSchedule.filter(item => item.date < `${targetPrefix}-01` && item.supervisor !== "");
-            
-            if (pastRecords.length === 0) {
-                if (!silent) alert("目前找不到在此月份之前的排班紀錄，將預設為名單的第一位。");
-                return;
-            }
+            if (pastRecords.length === 0) return;
 
-            // 由大到小排序，抓取離目前最近的一天（最後排班日）
             pastRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
             const lastRecord = pastRecords[0];
-
-            // 尋找最後一天的主管，以及「人員二（當天最後輪到的基層）」在現有名單的索引位置
             let svIdx = supervisors.indexOf(lastRecord.supervisor);
             let stIdx = staff.indexOf(lastRecord.staff2);
 
             const svSelect = document.getElementById("startSvSelect");
             const stSelect = document.getElementById("startStSelect");
+            if (svIdx !== -1 && svSelect) svSelect.value = supervisors[(svIdx + 1) % supervisors.length];
+            if (stIdx !== -1 && stSelect) stSelect.value = staff[(stIdx + 1) % staff.length];
 
-            // 如果名單裡還找得到這個人，就順延加 1 ( % 總人數作為循環)
-            if (svIdx !== -1 && svSelect) {
-                svSelect.value = supervisors[(svIdx + 1) % supervisors.length];
-            }
-            if (stIdx !== -1 && stSelect) {
-                stSelect.value = staff[(stIdx + 1) % staff.length];
-            }
-
-            if (!silent) alert(`已自動抓取！\n上一筆排班為 ${lastRecord.date}。\n為您接續排定下一位主管與人員。`);
+            if (!silent) alert(`🎯 已偵測上期歷史，自動順延接續下一位同仁。`);
         }
 
         function autoFillSequence() {
+            if (!isAdmin) return;
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentMonthItems = globalSchedule.filter(item => item.date.startsWith(prefix));
-            
-            if (currentMonthItems.length === 0) {
-                alert("請先點擊『初始化本月框架』再進行自動代入！");
-                return;
-            }
-            if (supervisors.length === 0 || staff.length < 2) {
-                alert("請確保至少有 1 位主管與 2 位以上的人員名單！");
-                return;
-            }
+            if (currentMonthItems.length === 0) { alert("❌ 請先點擊初始化框架！"); return; }
 
-            const startSvName = document.getElementById("startSvSelect").value;
-            const startStName = document.getElementById("startStSelect").value;
-
-            let svPointer = supervisors.indexOf(startSvName);
-            let stPointer = staff.indexOf(startStName);
-
-            if (svPointer === -1) svPointer = 0;
-            if (stPointer === -1) stPointer = 0;
+            let svPointer = supervisors.indexOf(document.getElementById("startSvSelect").value);
+            let stPointer = staff.indexOf(document.getElementById("startStSelect").value);
+            if (svPointer === -1) svPointer = 0; if (stPointer === -1) stPointer = 0;
 
             const updatedMonthItems = currentMonthItems.map((item) => {
-                const assignedSupervisor = supervisors[svPointer];
-                const assignedStaff1 = staff[stPointer];
-                const assignedStaff2 = staff[(stPointer + 1) % staff.length];
-
+                const s1 = staff[stPointer]; const s2 = staff[(stPointer + 1) % staff.length];
+                const sv = supervisors[svPointer];
                 svPointer = (svPointer + 1) % supervisors.length;
                 stPointer = (stPointer + 2) % staff.length;
-
-                return {
-                    ...item,
-                    supervisor: assignedSupervisor || "",
-                    staff1: assignedStaff1 || "",
-                    staff2: assignedStaff2 || ""
-                };
+                return { ...item, supervisor: sv, staff1: s1, staff2: s2 };
             });
 
             const otherMonthsRecords = globalSchedule.filter(item => !item.date.startsWith(prefix));
             globalSchedule = [...otherMonthsRecords, ...updatedMonthItems].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            saveToStorage();
-            render();
+            saveToFirebase();
         }
 
         function renderStats() {
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentFiltered = globalSchedule.filter(item => item.date.startsWith(prefix));
-
             const supervisorCounts = {}; const staffCounts = {};
             supervisors.forEach(s => supervisorCounts[s] = 0);
             staff.forEach(st => staffCounts[st] = 0);
@@ -356,34 +386,26 @@
             });
 
             document.getElementById("statsTitle").textContent = `📊 ${selectedYear}年${selectedMonth}月 當月值班次數`;
-            
-            document.getElementById("svStats").innerHTML = supervisors.map(sv => `
-                <div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate">
-                    <span>${sv}</span><span class="font-bold">${supervisorCounts[sv] || 0}次</span>
-                </div>
-            `).join('');
-
-            document.getElementById("stStats").innerHTML = staff.map(st => `
-                <div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate">
-                    <span>${st}</span><span class="font-bold">${staffCounts[st] || 0}次</span>
-                </div>
-            `).join('');
+            document.getElementById("svStats").innerHTML = supervisors.map(sv => `<div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>${sv}</span><span class="font-bold text-pink-600">${supervisorCounts[sv] || 0}次</span></div>`).join('');
+            document.getElementById("stStats").innerHTML = staff.map(st => `<div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>${st}</span><span class="font-bold text-sky-600">${staffCounts[st] || 0}次</span></div>`).join('');
         }
 
         function render() {
+            updateAdminUI();
+
             document.getElementById("supervisorList").innerHTML = supervisors.map((sv, idx) => `
                 <div class="flex items-center gap-1 text-xs">
                     <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
-                    <input type="text" value="${sv}" onchange="handlePersonnelChange('supervisor', ${idx}, this.value)" class="w-full px-2 py-1 border border-gray-200 rounded" />
-                    <button onclick="deletePersonnel('supervisor', ${idx})" class="text-gray-300 hover:text-red-500 px-1">❌</button>
+                    <input type="text" value="${sv}" onchange="handlePersonnelChange('supervisor', ${idx}, this.value)" ${isAdmin ? '' : 'disabled'} class="w-full px-2 py-1 border border-gray-200 rounded ${isAdmin ? 'bg-white' : 'bg-slate-50 text-gray-500'}" />
+                    <button onclick="deletePersonnel('supervisor', ${idx})" class="${isAdmin ? '' : 'hidden'} text-gray-300 hover:text-red-500 px-1">❌</button>
                 </div>
             `).join('');
 
             document.getElementById("staffList").innerHTML = staff.map((st, idx) => `
                 <div class="flex items-center gap-1 text-xs">
                     <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
-                    <input type="text" value="${st}" onchange="handlePersonnelChange('staff', ${idx}, this.value)" class="w-full px-2 py-1 border border-gray-200 rounded" />
-                    <button onclick="deletePersonnel('staff', ${idx})" class="text-gray-300 hover:text-red-500 px-1">❌</button>
+                    <input type="text" value="${st}" onchange="handlePersonnelChange('staff', ${idx}, this.value)" ${isAdmin ? '' : 'disabled'} class="w-full px-2 py-1 border border-gray-200 rounded ${isAdmin ? 'bg-white' : 'bg-slate-50 text-gray-500'}" />
+                    <button onclick="deletePersonnel('staff', ${idx})" class="${isAdmin ? '' : 'hidden'} text-gray-300 hover:text-red-500 px-1">❌</button>
                 </div>
             `).join('');
 
@@ -393,15 +415,7 @@
             const tbody = document.getElementById("scheduleBody");
 
             if (currentFiltered.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-12 text-gray-400">
-                            本月份尚未初始化框架。<br/>
-                            <button onclick="initializeMonthFramework()" class="mt-2 px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl hover:bg-emerald-100 font-medium">
-                                ✨ 點此一鍵建立本月框架
-                            </button>
-                        </td>
-                    </tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-12 text-gray-400">${isAdmin ? '💡 本月份尚未建立框架，管理員請點擊上方『⚡ 1. 初始化本月框架』按鈕。' : '📅 本月份尚未初始化框架，請聯繫管理者安排排班。'}</td></tr>`;
             } else {
                 tbody.innerHTML = currentFiltered.map(item => {
                     const svOptions = supervisors.map(sv => `<option value="${sv}" ${item.supervisor === sv ? 'selected' : ''}>${sv}</option>`).join('');
@@ -413,41 +427,46 @@
                     return `
                         <tr class="hover:bg-slate-50/40">
                             <td class="py-2.5 px-4 font-mono font-medium text-gray-900">${item.date}</td>
-                            <td class="py-2.5 px-4 text-center">
-                                <span class="px-2 py-0.5 rounded text-[11px] font-bold block truncate max-w-[100px] mx-auto ${tagClass}">
-                                    ${statusTag}
-                                </span>
-                            </td>
+                            <td class="py-2.5 px-4 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold block truncate max-w-[100px] mx-auto ${tagClass}">${statusTag}</span></td>
                             <td class="p-1">
-                                <select onchange="handleScheduleChange('${item.date}', 'supervisor', this.value)" class="w-full bg-pink-50/30 border border-pink-200/50 rounded-lg px-1.5 py-1 focus:ring-2 focus:ring-pink-300">
+                                <select onchange="handleScheduleChange('${item.date}', 'supervisor', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border rounded-lg px-1.5 py-1 ${isAdmin ? 'bg-pink-50/30 border-pink-200/50' : 'bg-slate-50/50 text-gray-600'} font-medium">
                                     <option value="">-- 主管 --</option>${svOptions}
                                 </select>
                             </td>
                             <td class="p-1">
-                                <select onchange="handleScheduleChange('${item.date}', 'staff1', this.value)" class="w-full bg-sky-50/30 border border-sky-200/50 rounded-lg px-1.5 py-1 focus:ring-2 focus:ring-sky-300">
+                                <select onchange="handleScheduleChange('${item.date}', 'staff1', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border rounded-lg px-1.5 py-1 ${isAdmin ? 'bg-sky-50/30 border-sky-200/50' : 'bg-slate-50/50 text-gray-600'} font-medium">
                                     <option value="">-- 人員一 --</option>${st1Options}
                                 </select>
                             </td>
                             <td class="p-1">
-                                <select onchange="handleScheduleChange('${item.date}', 'staff2', this.value)" class="w-full bg-sky-50/30 border border-sky-200/50 rounded-lg px-1.5 py-1 focus:ring-2 focus:ring-sky-300">
+                                <select onchange="handleScheduleChange('${item.date}', 'staff2', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border rounded-lg px-1.5 py-1 ${isAdmin ? 'bg-sky-50/30 border-sky-200/50' : 'bg-slate-50/50 text-gray-600'} font-medium">
                                     <option value="">-- 人員二 --</option>${st2Options}
                                 </select>
                             </td>
                             <td class="p-1">
-                                <input type="text" value="${item.notes || ''}" placeholder="交辦/追蹤事項..." onchange="handleScheduleChange('${item.date}', 'notes', this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 placeholder-gray-300" />
+                                <input type="text" value="${item.notes || ''}" placeholder="交辦/追蹤事項..." onchange="handleScheduleChange('${item.date}', 'notes', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border border-gray-200 rounded-lg px-2 py-1 ${isAdmin ? 'bg-white' : 'bg-slate-50/30 text-gray-600'}" />
                             </td>
-                            <td class="p-1 text-center no-print">
-                                <button onclick="deleteDate('${item.date}')" class="text-gray-300 hover:text-red-500">🗑️</button>
-                            </td>
+                            <td class="p-1 text-center no-print"><button onclick="deleteDate('${item.date}')" class="${isAdmin ? '' : 'hidden'} text-gray-300 hover:text-red-500">🗑️</button></td>
                         </tr>`;
                 }).join('');
             }
-
             renderStats();
             updateStartSelectors();
         }
 
-        render();
+        // 核心：網頁載入時自動監聽 Firebase 雲端更新
+        window.onload = function() {
+            db.ref("duty_system").on("value", (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    if (data.supervisors) supervisors = data.supervisors;
+                    if (data.staff) staff = data.staff;
+                    if (data.globalSchedule) globalSchedule = data.globalSchedule;
+                }
+                render();
+                autoDetectStartingPoint(true);
+            });
+        };
     </script>
 </body>
 </html>
