@@ -68,7 +68,7 @@
                         <h2 class="text-md font-bold text-gray-700 flex items-center gap-2">
                             <span class="w-2 h-4 bg-pink-400 rounded-full"></span>值班主管順序
                         </h2>
-                        <button onclick="addPersonnel('supervisor')" class="text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors">
+                        <button id="addSupervisorBtn" onclick="addPersonnel('supervisor')" class="text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors">
                             ➕ 增加
                         </button>
                     </div>
@@ -80,7 +80,7 @@
                         <h2 class="text-md font-bold text-gray-700 flex items-center gap-2">
                             <span class="w-2 h-4 bg-sky-400 rounded-full"></span>值班人員順序
                         </h2>
-                        <button onclick="addPersonnel('staff')" class="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors">
+                        <button id="addStaffBtn" onclick="addPersonnel('staff')" class="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors">
                             ➕ 增加
                         </button>
                     </div>
@@ -408,6 +408,11 @@ function renderStats() {
 function render() {
             updateAdminUI();
 
+            // ✨ 自動切換「➕ 增加」按鈕的顯示狀態
+            const addSvBtn = document.getElementById("addSupervisorBtn");
+            const addStBtn = document.getElementById("addStaffBtn");
+            if (addSvBtn) addSvBtn.style.display = isAdmin ? 'inline-block' : 'none';
+            if (addStBtn) addStBtn.style.display = isAdmin ? 'inline-block' : 'none';
             // 1. 值班主管順序顯示優化
             if (isAdmin) {
                 // 管理員登入：顯示可以修改與刪除的輸入框
