@@ -61,16 +61,18 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div class="lg:col-span-1 space-y-6 no-print">
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 print-card">
                     <div class="flex justify-between items-center mb-2">
                         <h2 class="text-md font-bold text-gray-700 flex items-center gap-2">
                             <span class="w-2 h-4 bg-pink-400 rounded-full"></span>值班主管順序
                         </h2>
-                        <button id="addSvBtn" onclick="addPersonnel('supervisor')" class="admin-only-btn text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors hidden">➕ 增加</button>
+                        <button onclick="addPersonnel('supervisor')" class="text-xs bg-pink-50 text-pink-600 hover:bg-pink-100 px-2 py-1 rounded-lg font-medium transition-colors">
+                            ➕ 增加
+                        </button>
                     </div>
-                    <div id="supervisorList" class="space-y-1.5 max-h-[180px] overflow-y-auto pr-1"></div>
+                    <div id="supervisorList" class="space-y-1.5 pr-1"></div>
                 </div>
 
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 print-card">
@@ -78,9 +80,11 @@
                         <h2 class="text-md font-bold text-gray-700 flex items-center gap-2">
                             <span class="w-2 h-4 bg-sky-400 rounded-full"></span>值班人員順序
                         </h2>
-                        <button id="addStBtn" onclick="addPersonnel('staff')" class="admin-only-btn text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors hidden">➕ 增加</button>
+                        <button onclick="addPersonnel('staff')" class="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-2 py-1 rounded-lg font-medium transition-colors">
+                            ➕ 增加
+                        </button>
                     </div>
-                    <div id="staffList" class="space-y-1.5 max-h-[240px] overflow-y-auto pr-1"></div>
+                    <div id="staffList" class="space-y-1.5 pr-1"></div>
                 </div>
 
                 <div class="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-2xl border border-gray-200 text-xs">
@@ -92,7 +96,7 @@
                         </div>
                         <div class="pt-2 border-t border-gray-200">
                             <span class="font-semibold text-sky-600 block mb-1">人員別</span>
-                            <div id="stStats" class="grid grid-cols-2 gap-1 max-h-[120px] overflow-y-auto"></div>
+                            <div id="stStats" class="grid grid-cols-2 gap-1"></div>
                         </div>
                     </div>
                 </div>
@@ -370,7 +374,7 @@ const firebaseConfig = {
             saveToFirebase();
         }
 
-        function renderStats() {
+function renderStats() {
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentFiltered = globalSchedule.filter(item => item.date.startsWith(prefix));
             const supervisorCounts = {}; const staffCounts = {};
@@ -384,10 +388,23 @@ const firebaseConfig = {
             });
 
             document.getElementById("statsTitle").textContent = `📊 ${selectedYear}年${selectedMonth}月 當月值班次數`;
-            document.getElementById("svStats").innerHTML = supervisors.map(sv => `<div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>${sv}</span><span class="font-bold text-pink-600">${supervisorCounts[sv] || 0}次</span></div>`).join('');
-            document.getElementById("stStats").innerHTML = staff.map(st => `<div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>${st}</span><span class="font-bold text-sky-600">${staffCounts[st] || 0}次</span></div>`).join('');
+            
+            // 升級：主管別次數統計 (高質感粉格 + 白色數字盾牌)
+            document.getElementById("svStats").innerHTML = supervisors.map(sv => `
+                <div class="bg-pink-50/40 p-2 rounded-xl border border-pink-100/20 flex justify-between items-center truncate shadow-3xs">
+                    <span class="text-gray-700 font-medium">${sv}</span>
+                    <span class="font-bold text-pink-600 bg-white px-2 py-0.5 rounded-md border border-pink-100/70 shadow-3xs font-mono text-[11px]">${supervisorCounts[sv] || 0}次</span>
+                </div>
+            `).join('');
+            
+            // 升級：人員別次數統計 (高質感藍格 + 白色數字盾牌)
+            document.getElementById("stStats").innerHTML = staff.map(st => `
+                <div class="bg-sky-50/40 p-2 rounded-xl border border-sky-100/20 flex justify-between items-center truncate shadow-3xs">
+                    <span class="text-gray-700 font-medium">${st}</span>
+                    <span class="font-bold text-sky-600 bg-white px-2 py-0.5 rounded-md border border-sky-100/70 shadow-3xs font-mono text-[11px]">${staffCounts[st] || 0}次</span>
+                </div>
+            `).join('');
         }
-
 function render() {
             updateAdminUI();
 
