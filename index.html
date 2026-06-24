@@ -388,24 +388,48 @@ const firebaseConfig = {
             document.getElementById("stStats").innerHTML = staff.map(st => `<div class="bg-white p-1 rounded border border-gray-100 flex justify-between truncate"><span>${st}</span><span class="font-bold text-sky-600">${staffCounts[st] || 0}次</span></div>`).join('');
         }
 
-        function render() {
+function render() {
             updateAdminUI();
 
-            document.getElementById("supervisorList").innerHTML = supervisors.map((sv, idx) => `
-                <div class="flex items-center gap-1 text-xs">
-                    <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
-                    <input type="text" value="${sv}" onchange="handlePersonnelChange('supervisor', ${idx}, this.value)" ${isAdmin ? '' : 'disabled'} class="w-full px-2 py-1 border border-gray-200 rounded ${isAdmin ? 'bg-white' : 'bg-slate-50 text-gray-500'}" />
-                    <button onclick="deletePersonnel('supervisor', ${idx})" class="${isAdmin ? '' : 'hidden'} text-gray-300 hover:text-red-500 px-1">❌</button>
-                </div>
-            `).join('');
+            // 1. 值班主管順序顯示優化
+            if (isAdmin) {
+                // 管理員登入：顯示可以修改與刪除的輸入框
+                document.getElementById("supervisorList").innerHTML = supervisors.map((sv, idx) => `
+                    <div class="flex items-center gap-1 text-xs">
+                        <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
+                        <input type="text" value="${sv}" onchange="handlePersonnelChange('supervisor', ${idx}, this.value)" class="w-full px-2 py-1 border border-gray-200 rounded bg-white" />
+                        <button onclick="deletePersonnel('supervisor', ${idx})" class="text-gray-300 hover:text-red-500 px-1">❌</button>
+                    </div>
+                `).join('');
+            } else {
+                // 一般同仁瀏覽：直接顯示精美、帶有順序編號的純文字清單
+                document.getElementById("supervisorList").innerHTML = supervisors.map((sv, idx) => `
+                    <div class="flex items-center py-1.5 px-3 bg-pink-50/60 rounded-xl text-xs font-semibold text-gray-700 border border-pink-100/30 shadow-2xs">
+                        <span class="text-pink-500 w-8 font-mono font-bold text-sm">#${idx+1}</span>
+                        <span>${sv}</span>
+                    </div>
+                `).join('');
+            }
 
-            document.getElementById("staffList").innerHTML = staff.map((st, idx) => `
-                <div class="flex items-center gap-1 text-xs">
-                    <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
-                    <input type="text" value="${st}" onchange="handlePersonnelChange('staff', ${idx}, this.value)" ${isAdmin ? '' : 'disabled'} class="w-full px-2 py-1 border border-gray-200 rounded ${isAdmin ? 'bg-white' : 'bg-slate-50 text-gray-500'}" />
-                    <button onclick="deletePersonnel('staff', ${idx})" class="${isAdmin ? '' : 'hidden'} text-gray-300 hover:text-red-500 px-1">❌</button>
-                </div>
-            `).join('');
+            // 2. 值班人員順序顯示優化
+            if (isAdmin) {
+                // 管理員登入：顯示可以修改與刪除的輸入框
+                document.getElementById("staffList").innerHTML = staff.map((st, idx) => `
+                    <div class="flex items-center gap-1 text-xs">
+                        <span class="text-gray-400 w-10 font-mono">#${idx+1}</span>
+                        <input type="text" value="${st}" onchange="handlePersonnelChange('staff', ${idx}, this.value)" class="w-full px-2 py-1 border border-gray-200 rounded bg-white" />
+                        <button onclick="deletePersonnel('staff', ${idx})" class="text-gray-300 hover:text-red-500 px-1">❌</button>
+                    </div>
+                `).join('');
+            } else {
+                // 一般同仁瀏覽：直接顯示精美、帶有順序編號的純文字清單
+                document.getElementById("staffList").innerHTML = staff.map((st, idx) => `
+                    <div class="flex items-center py-1.5 px-3 bg-sky-50/60 rounded-xl text-xs font-semibold text-gray-700 border border-sky-100/30 shadow-2xs">
+                        <span class="text-sky-500 w-8 font-mono font-bold text-sm">#${idx+1}</span>
+                        <span>${st}</span>
+                    </div>
+                `).join('');
+            }
 
             document.getElementById("tableTitle").textContent = `📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表`;
             const prefix = `${selectedYear}-${selectedMonth}`;
@@ -416,36 +440,57 @@ const firebaseConfig = {
                 tbody.innerHTML = `<tr><td colspan="7" class="text-center py-12 text-gray-400">${isAdmin ? '💡 本月份尚未建立框架，管理員請點擊上方『⚡ 1. 初始化本月框架』按鈕。' : '📅 本月份尚未初始化框架，請聯繫管理者安排排班。'}</td></tr>`;
             } else {
                 tbody.innerHTML = currentFiltered.map(item => {
-                    const svOptions = supervisors.map(sv => `<option value="${sv}" ${item.supervisor === sv ? 'selected' : ''}>${sv}</option>`).join('');
-                    const st1Options = staff.map(st => `<option value="${st}" ${item.staff1 === st ? 'selected' : ''}>${st}</option>`).join('');
-                    const st2Options = staff.map(st => `<option value="${st}" ${item.staff2 === st ? 'selected' : ''}>${st}</option>`).join('');
                     const statusTag = item.isHoliday ? (item.holidayName || "國定假日") : `週${item.dayOfWeek}`;
                     const tagClass = item.isHoliday ? "bg-rose-100 text-rose-700 border border-rose-200" : "bg-amber-100 text-amber-700";
 
-                    return `
-                        <tr class="hover:bg-slate-50/40">
-                            <td class="py-2.5 px-4 font-mono font-medium text-gray-900">${item.date}</td>
-                            <td class="py-2.5 px-4 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold block truncate max-w-[100px] mx-auto ${tagClass}">${statusTag}</span></td>
-                            <td class="p-1">
-                                <select onchange="handleScheduleChange('${item.date}', 'supervisor', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border rounded-lg px-1.5 py-1 ${isAdmin ? 'bg-pink-50/30 border-pink-200/50' : 'bg-slate-50/50 text-gray-600'} font-medium">
-                                    <option value="">-- 主管 --</option>${svOptions}
-                                </select>
-                            </td>
-                            <td class="p-1">
-                                <select onchange="handleScheduleChange('${item.date}', 'staff1', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border rounded-lg px-1.5 py-1 ${isAdmin ? 'bg-sky-50/30 border-sky-200/50' : 'bg-slate-50/50 text-gray-600'} font-medium">
-                                    <option value="">-- 人員一 --</option>${st1Options}
-                                </select>
-                            </td>
-                            <td class="p-1">
-                                <select onchange="handleScheduleChange('${item.date}', 'staff2', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border rounded-lg px-1.5 py-1 ${isAdmin ? 'bg-sky-50/30 border-sky-200/50' : 'bg-slate-50/50 text-gray-600'} font-medium">
-                                    <option value="">-- 人員二 --</option>${st2Options}
-                                </select>
-                            </td>
-                            <td class="p-1">
-                                <input type="text" value="${item.notes || ''}" placeholder="交辦/追蹤事項..." onchange="handleScheduleChange('${item.date}', 'notes', this.value)" ${isAdmin ? '' : 'disabled'} class="w-full border border-gray-200 rounded-lg px-2 py-1 ${isAdmin ? 'bg-white' : 'bg-slate-50/30 text-gray-600'}" />
-                            </td>
-                            <td class="p-1 text-center no-print"><button onclick="deleteDate('${item.date}')" class="${isAdmin ? '' : 'hidden'} text-gray-300 hover:text-red-500">🗑️</button></td>
-                        </tr>`;
+                    if (isAdmin) {
+                        // 管理員模式：渲染下拉選單供即時修改
+                        const svOptions = supervisors.map(sv => `<option value="${sv}" ${item.supervisor === sv ? 'selected' : ''}>${sv}</option>`).join('');
+                        const st1Options = staff.map(st => `<option value="${st}" ${item.staff1 === st ? 'selected' : ''}>${st}</option>`).join('');
+                        const st2Options = staff.map(st => `<option value="${st}" ${item.staff2 === st ? 'selected' : ''}>${st}</option>`).join('');
+                        return `
+                            <tr class="hover:bg-slate-50/40">
+                                <td class="py-2.5 px-4 font-mono font-medium text-gray-900">${item.date}</td>
+                                <td class="py-2.5 px-4 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold block truncate max-w-[100px] mx-auto ${tagClass}">${statusTag}</span></td>
+                                <td class="p-1">
+                                    <select onchange="handleScheduleChange('${item.date}', 'supervisor', this.value)" class="w-full border border-pink-200/50 rounded-lg px-1.5 py-1 bg-pink-50/30 font-medium text-xs focus:outline-none">
+                                        <option value="">-- 主管 --</option>${svOptions}
+                                    </select>
+                                </td>
+                                <td class="p-1">
+                                    <select onchange="handleScheduleChange('${item.date}', 'staff1', this.value)" class="w-full border border-sky-200/50 rounded-lg px-1.5 py-1 bg-sky-50/30 font-medium text-xs focus:outline-none">
+                                        <option value="">-- 人員一 --</option>${st1Options}
+                                    </select>
+                                </td>
+                                <td class="p-1">
+                                    <select onchange="handleScheduleChange('${item.date}', 'staff2', this.value)" class="w-full border border-sky-200/50 rounded-lg px-1.5 py-1 bg-sky-50/30 font-medium text-xs focus:outline-none">
+                                        <option value="">-- 人員二 --</option>${st2Options}
+                                    </select>
+                                </td>
+                                <td class="p-1">
+                                    <input type="text" value="${item.notes || ''}" placeholder="交辦/追蹤事項..." onchange="handleScheduleChange('${item.date}', 'notes', this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none" />
+                                </td>
+                                <td class="p-1 text-center no-print"><button onclick="deleteDate('${item.date}')" class="text-gray-300 hover:text-red-500">🗑️</button></td>
+                            </tr>`;
+                    } else {
+                        // 同仁模式：直接顯示漂亮、飽滿的純文字彩標，不顯示醜陋的灰色下拉選單，極利於手機觀看與列印
+                        return `
+                            <tr class="hover:bg-slate-50/40 border-b border-gray-100 transition-colors">
+                                <td class="py-3 px-4 font-mono font-medium text-gray-900">${item.date}</td>
+                                <td class="py-3 px-4 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold block truncate max-w-[100px] mx-auto ${tagClass}">${statusTag}</span></td>
+                                <td class="py-3 px-4">
+                                    <span class="px-2.5 py-1 bg-pink-50/80 text-pink-700 rounded-md font-semibold text-xs border border-pink-100/60">${item.supervisor || '—'}</span>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <span class="px-2.5 py-1 bg-sky-50/80 text-sky-700 rounded-md font-semibold text-xs border border-sky-100/60">${item.staff1 || '—'}</span>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <span class="px-2.5 py-1 bg-sky-50/80 text-sky-700 rounded-md font-semibold text-xs border border-sky-100/60">${item.staff2 || '—'}</span>
+                                </td>
+                                <td class="py-3 px-4 text-gray-600 font-medium text-xs">${item.notes || ''}</td>
+                                <td class="py-3 px-4 text-center no-print"></td>
+                            </tr>`;
+                    }
                 }).join('');
             }
             renderStats();
