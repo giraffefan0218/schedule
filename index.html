@@ -453,7 +453,29 @@ function render() {
                 `).join('');
             }
 
-            document.getElementById("tableTitle").textContent = `📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表`;
+            // 修正：調整標題，並加入僅在列印時顯示的「股長/主任」核章欄位
+            document.getElementById("tableTitle").innerHTML = `
+                <div class="flex justify-between items-center w-full">
+                    <span class="text-base sm:text-lg">📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表</span>
+                   
+			<div class="hidden print:flex gap-4 mb-1">
+                       <div class="flex flex-col items-center">
+                            <div class="text-[12px] font-sans font-bold text-gray-700 mb-0.5 tracking-wider">三股</div>
+                            <div class="w-28 h-16 border border-gray-400 rounded bg-white"></div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <div class="text-[12px] font-sans font-bold text-gray-700 mb-0.5 tracking-wider">六股</div>
+                            <div class="w-28 h-16 border border-gray-400 rounded bg-white"></div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <div class="text-[12px] font-sans font-bold text-gray-700 mb-0.5 tracking-wider">主任</div>
+                            <div class="w-28 h-16 border border-gray-400 rounded bg-white"></div>
+                        </div>
+                    </div>
+                        </div>
+                    </div>
+                </div>
+            `;
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentFiltered = globalSchedule.filter(item => item.date.startsWith(prefix));
             const tbody = document.getElementById("scheduleBody");
