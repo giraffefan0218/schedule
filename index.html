@@ -61,7 +61,7 @@
             </div>
         </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div class="lg:col-span-1 space-y-6 no-print">
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 print-card">
                     <div class="flex justify-between items-center mb-2">
@@ -128,17 +128,16 @@
 
     <script>
         // 🛠️ 填入您的 Firebase 設定物件
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyCwOw7QKyTY1K7So4LISmfTaqZBsMi3LfI",
-  authDomain: "achta-6adb2.firebaseapp.com",
-  databaseURL: "https://achta-6adb2-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "achta-6adb2",
-  storageBucket: "achta-6adb2.firebasestorage.app",
-  messagingSenderId: "1094660947040",
-  appId: "1:1094660947040:web:b3ca61d4b03a977f731705",
-  measurementId: "G-DGLPBLWYTC"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyCwOw7QKyTY1K7So4LISmfTaqZBsMi3LfI",
+            authDomain: "achta-6adb2.firebaseapp.com",
+            databaseURL: "https://achta-6adb2-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "achta-6adb2",
+            storageBucket: "achta-6adb2.firebasestorage.app",
+            messagingSenderId: "1094660947040",
+            appId: "1:1094660947040:web:b3ca61d4b03a977f731705",
+            measurementId: "G-DGLPBLWYTC"
+        };
 
         // 初始化 Firebase
         firebase.initializeApp(firebaseConfig);
@@ -159,13 +158,36 @@ const firebaseConfig = {
             }
         };
 
-        let selectedYear = "2026";
-        let selectedMonth = "06";
+        // 動態取得現在時間的年月
+        const today = new Date();
+        let selectedYear = today.getFullYear().toString();
+        let selectedMonth = String(today.getMonth() + 1).padStart(2, '0');
         let isAdmin = false;
 
         let supervisors = ["主管1", "主管2", "主管3", "主管4"];
         let staff = ["人員1", "人員2", "人員3", "人員4", "人員5", "人員6", "人員7", "人員8", "人員9", "人員10"];
         let globalSchedule = [];
+
+        // 年份選單自動產生與選定
+        const yearSelect = document.getElementById("yearSelect");
+        // 確保目前的年份在選項中（如果不是預設的 2026 或 2027，則自動加入選項）
+        if (!Array.from(yearSelect.options).some(opt => opt.value === selectedYear)) {
+            let opt = document.createElement("option");
+            opt.value = selectedYear;
+            opt.textContent = selectedYear + " 年";
+            yearSelect.appendChild(opt);
+        }
+        yearSelect.value = selectedYear;
+
+        // 月份選單生成與自動選定
+        const monthSelect = document.getElementById("monthSelect");
+        for (let i = 1; i <= 12; i++) {
+            let m = String(i).padStart(2, '0');
+            let opt = document.createElement("option");
+            opt.value = m; opt.textContent = m + " 月";
+            if (m === selectedMonth) opt.selected = true;
+            monthSelect.appendChild(opt);
+        }
 
         // 將資料同步上傳至 Firebase 雲端
         function saveToFirebase() {
@@ -180,16 +202,6 @@ const firebaseConfig = {
             }).catch(err => {
                 alert("❌ 雲端拒絕寫入！\n原因：未通過伺服器驗證，或 F12 被系統攔截。");
             });
-        }
-
-        // 月份選單生成
-        const monthSelect = document.getElementById("monthSelect");
-        for (let i = 1; i <= 12; i++) {
-            let m = String(i).padStart(2, '0');
-            let opt = document.createElement("option");
-            opt.value = m; opt.textContent = m + " 月";
-            if (m === selectedMonth) opt.selected = true;
-            monthSelect.appendChild(opt);
         }
 
         function updateAdminUI() {
@@ -374,7 +386,7 @@ const firebaseConfig = {
             saveToFirebase();
         }
 
-function renderStats() {
+        function renderStats() {
             const prefix = `${selectedYear}-${selectedMonth}`;
             const currentFiltered = globalSchedule.filter(item => item.date.startsWith(prefix));
             const supervisorCounts = {}; const staffCounts = {};
@@ -405,7 +417,8 @@ function renderStats() {
                 </div>
             `).join('');
         }
-function render() {
+
+        function render() {
             updateAdminUI();
 
             // ✨ 自動切換「➕ 增加」按鈕的顯示狀態
@@ -413,6 +426,7 @@ function render() {
             const addStBtn = document.getElementById("addStaffBtn");
             if (addSvBtn) addSvBtn.style.display = isAdmin ? 'inline-block' : 'none';
             if (addStBtn) addStBtn.style.display = isAdmin ? 'inline-block' : 'none';
+
             // 1. 值班主管順序顯示優化
             if (isAdmin) {
                 // 管理員登入：顯示可以修改與刪除的輸入框
@@ -457,8 +471,7 @@ function render() {
             document.getElementById("tableTitle").innerHTML = `
                 <div class="flex justify-between items-center w-full">
                     <span class="text-base sm:text-lg">📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表</span>
-                   
-			<div class="hidden print:flex gap-4 mb-1">
+                    <div class="hidden print:flex gap-4 mb-1">
                        <div class="flex flex-col items-center">
                             <div class="text-[12px] font-sans font-bold text-gray-700 mb-0.5 tracking-wider">三股</div>
                             <div class="w-28 h-16 border border-gray-400 rounded bg-white"></div>
@@ -470,8 +483,6 @@ function render() {
                         <div class="flex flex-col items-center">
                             <div class="text-[12px] font-sans font-bold text-gray-700 mb-0.5 tracking-wider">主任</div>
                             <div class="w-28 h-16 border border-gray-400 rounded bg-white"></div>
-                        </div>
-                    </div>
                         </div>
                     </div>
                 </div>
