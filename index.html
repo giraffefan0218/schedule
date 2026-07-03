@@ -467,10 +467,13 @@
                 `).join('');
             }
 
-            // 修正：調整標題，並加入僅在列印時顯示的「股長/主任」核章欄位
+		// 修正：調整標題，並加入僅在列印時顯示的「股長/主任」核章欄位
             document.getElementById("tableTitle").innerHTML = `
                 <div class="flex justify-between items-center w-full">
-                    <span class="text-base sm:text-lg">📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表</span>
+                    <div class="flex flex-col">
+                        <span class="text-base sm:text-lg">📅 ${selectedYear} 年 ${selectedMonth} 月 假日值班表</span>
+                        <span class="text-sm text-red-500 font-medium mt-1">※ 值班人員如無法值班，請自行調班 ※</span>
+                    </div>
                     <div class="hidden print:flex gap-4 mb-1">
                        <div class="flex flex-col items-center">
                             <div class="text-[12px] font-sans font-bold text-gray-700 mb-0.5 tracking-wider">三股</div>
